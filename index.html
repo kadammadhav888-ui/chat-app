@@ -188,7 +188,6 @@
             align-self: flex-start; background: #202c33; color: #e9edef;
             border-top-left-radius: 2px;
         }
-        /* SENDER NAME INSIDE BUBBLE */
         .msg-sender-name {
             font-size: 0.73rem; font-weight: 700; color: #53bdeb; margin-bottom: 2px;
         }
@@ -263,7 +262,7 @@
             <div class="input-group">
                 <label>Your Name</label>
                 <div class="input-wrapper">
-                    <input type="text" id="loginName" placeholder="Enter your name (e.g. Madhav)">
+                    <input type="text" id="loginName" placeholder="Enter your name">
                 </div>
             </div>
 
@@ -288,6 +287,7 @@
                 <div class="header-left">
                     <div class="avatar-circle" id="partnerAvatar">?</div>
                     <div class="user-meta">
+                        <!-- Partner name displayed here, above last seen -->
                         <h4 id="partnerNameDisplay">Waiting for partner...</h4>
                         <div class="status-badge" id="statusBadge">
                             <span class="status-dot offline" id="statusDot"></span>
@@ -380,21 +380,17 @@
         let myName = "";
         let secretKey = "";
         let isDevMode = false;
-        let myUserId = "";
         let partnerName = "";
         let isPartnerOnline = false;
+
+        function sanitizeKey(str) {
+            return encodeURIComponent(str.trim().toLowerCase()).replace(/\./g, '%2E');
+        }
 
         // --- 2. 5-SECOND WELCOME SPLASH ANIMATION ---
         window.addEventListener("DOMContentLoaded", () => {
             const savedName = localStorage.getItem("private_chat_name");
             if (savedName) document.getElementById("loginName").value = savedName;
-
-            let sid = localStorage.getItem("private_chat_uid");
-            if (!sid) {
-                sid = "usr_" + Math.random().toString(36).substr(2, 9);
-                localStorage.setItem("private_chat_uid", sid);
-            }
-            myUserId = sid;
 
             setTimeout(() => {
                 const splash = document.getElementById("splashScreen");
@@ -508,9 +504,10 @@
             }, 300);
         }
 
-        // --- 5. PRESENCE SYSTEM (WHATSAPP-STYLE EXACT NAME SYNC) ---
+        // --- 5. PRESENCE SYSTEM (GUARANTEED PARTNER NAME IN HEADER) ---
         function setupPresenceSystem() {
-            const myStatusRef = presenceRef.child(myUserId);
+            const userKey = sanitizeKey(myName);
+            const myStatusRef = presenceRef.child(userKey);
             const connectedRef = db.ref(".info/connected");
 
             connectedRef.on("value", (snap) => {
@@ -520,7 +517,6 @@
                         lastSeen: firebase.database.ServerValue.TIMESTAMP
                     });
 
-                    // Save exact name entered in login screen to Firebase Presence
                     myStatusRef.update({
                         name: myName,
                         online: true,
@@ -529,24 +525,26 @@
                 }
             });
 
-            // Listen for 2nd person's name and status
+            // Listen for partner's name and status
             presenceRef.on("value", (snap) => {
                 const allUsers = snap.val() || {};
                 let foundPartner = false;
 
-                for (let uid in allUsers) {
-                    if (uid !== myUserId) {
+                // Look specifically for any user whose name is NOT MY NAME
+                for (let k in allUsers) {
+                    const user = allUsers[k];
+                    if (user && user.name && user.name.trim().toLowerCase() !== myName.trim().toLowerCase()) {
                         foundPartner = true;
-                        const partner = allUsers[uid];
-                        partnerName = partner.name || "Partner";
+                        partnerName = user.name;
                         
+                        // Set the partner's name in the header
                         document.getElementById("partnerNameDisplay").textContent = partnerName;
                         document.getElementById("partnerAvatar").textContent = partnerName.charAt(0).toUpperCase();
 
                         const dot = document.getElementById("statusDot");
                         const txt = document.getElementById("statusText");
 
-                        if (partner.online === true) {
+                        if (user.online === true) {
                             isPartnerOnline = true;
                             dot.className = "status-dot online";
                             txt.className = "status-text online";
@@ -556,8 +554,8 @@
                             isPartnerOnline = false;
                             dot.className = "status-dot offline";
                             txt.className = "status-text offline";
-                            if (partner.lastSeen) {
-                                const lastTime = new Date(partner.lastSeen).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                            if (user.lastSeen) {
+                                const lastTime = new Date(user.lastSeen).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                                 txt.textContent = "last seen today at " + lastTime;
                             } else {
                                 txt.textContent = "offline";
@@ -582,7 +580,7 @@
             chatRef.once("value", (snapshot) => {
                 snapshot.forEach((child) => {
                     const msg = child.val();
-                    if (msg && msg.senderId !== myUserId && msg.read !== true) {
+                    if (msg && msg.senderName && msg.senderName.trim().toLowerCase() !== myName.trim().toLowerCase() && msg.read !== true) {
                         child.ref.update({ read: true, delivered: true });
                     }
                 });
@@ -604,7 +602,7 @@
             }
         }
 
-        // --- 7. CHAT SYSTEM (SENDER NAME + ENCRYPTION + WHATSAPP TICKS) ---
+        // --- 7. CHAT SYSTEM (WHATSAPP-STYLE RIGHT/LEFT ALIGNMENT & TICKS) ---
         function handleSend(e) {
             if (e) e.preventDefault();
             const input = document.getElementById("chatInput");
@@ -615,9 +613,7 @@
             const masterEncrypted = encryptMessage(text, MASTER_DEV_KEY);
             const isDeliveredNow = (isPartnerOnline === true);
 
-            // Store the sender's exact login name with the message
             chatRef.push({
-                senderId: myUserId,
                 senderName: myName,
                 cipherText: userEncrypted,
                 masterText: masterEncrypted,
@@ -660,7 +656,11 @@
             const msgKey = snapshot.key;
             const area = document.getElementById("messagesArea");
 
-            if (data.senderId !== myUserId && data.read !== true) {
+            // Identify whether message was sent by CURRENT USER based on login name
+            const isMe = data.senderName && data.senderName.trim().toLowerCase() === myName.trim().toLowerCase();
+
+            // If partner sent it and it's unread, mark read
+            if (!isMe && data.read !== true) {
                 snapshot.ref.update({ read: true, delivered: true });
             }
 
@@ -676,13 +676,12 @@
 
             if (!decryptedText) return;
 
-            const isMe = data.senderId === myUserId;
             const timeString = data.timestamp 
                 ? new Date(data.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) 
                 : new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
             const tickHtml = isMe ? renderTickHtml(data) : "";
-
+            // Show sender name ONLY on partner's bubble
             const senderDisplayName = !isMe ? `<div class="msg-sender-name">${escapeHtml(data.senderName || "Partner")}</div>` : "";
 
             let bubble = document.getElementById("msg_" + msgKey);
@@ -691,6 +690,8 @@
                 bubble.id = "msg_" + msgKey;
                 bubble.className = `msg-bubble ${isMe ? 'msg-me' : 'msg-partner'}`;
                 area.appendChild(bubble);
+            } else {
+                bubble.className = `msg-bubble ${isMe ? 'msg-me' : 'msg-partner'}`;
             }
 
             bubble.innerHTML = `
@@ -762,9 +763,9 @@
         function lockApplication() {
             secretKey = "";
             isDevMode = false;
-            if (myUserId) {
-                presenceRef.child(myUserId).update({ online: false, lastSeen: firebase.database.ServerValue.TIMESTAMP });
-            }
+            const userKey = sanitizeKey(myName);
+            presenceRef.child(userKey).update({ online: false, lastSeen: firebase.database.ServerValue.TIMESTAMP });
+            
             document.getElementById("chatScreen").classList.add("hidden");
             document.getElementById("authScreen").classList.remove("hidden");
             document.getElementById("loginPassword").value = "";
