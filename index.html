@@ -171,25 +171,33 @@
         /* MESSAGES AREA */
         .messages-container {
             flex: 1; min-height: 0; padding: 14px 16px; overflow-y: auto;
-            display: flex; flex-direction: column; gap: 8px;
+            display: flex; flex-direction: column; gap: 10px;
             background: #0b141a; background-image: radial-gradient(#182229 1px, transparent 1px);
             background-size: 20px 20px;
         }
         .msg-bubble {
-            max-width: 82%; padding: 7px 12px 6px; border-radius: 10px;
+            max-width: 82%; padding: 8px 12px 6px; border-radius: 10px;
             font-size: 0.92rem; line-height: 1.38; word-break: break-word;
             position: relative; box-shadow: 0 1px 2px rgba(0,0,0,0.3);
         }
+        /* Right bubble for CURRENT USER (Green) */
         .msg-me {
-            align-self: flex-end; background: #005c4b; color: #e9edef;
-            border-top-right-radius: 2px;
+            align-self: flex-end !important;
+            background: #005c4b !important;
+            color: #e9edef !important;
+            border-top-right-radius: 2px !important;
+            margin-left: auto;
         }
+        /* Left bubble for PARTNER (Dark Grey) */
         .msg-partner {
-            align-self: flex-start; background: #202c33; color: #e9edef;
-            border-top-left-radius: 2px;
+            align-self: flex-start !important;
+            background: #202c33 !important;
+            color: #e9edef !important;
+            border-top-left-radius: 2px !important;
+            margin-right: auto;
         }
         .msg-sender-name {
-            font-size: 0.73rem; font-weight: 700; color: #53bdeb; margin-bottom: 2px;
+            font-size: 0.74rem; font-weight: 700; color: #53bdeb; margin-bottom: 2px;
         }
         .msg-info {
             display: flex; justify-content: flex-end; align-items: center;
@@ -287,7 +295,7 @@
                 <div class="header-left">
                     <div class="avatar-circle" id="partnerAvatar">?</div>
                     <div class="user-meta">
-                        <!-- Partner name displayed here, above last seen -->
+                        <!-- HEADER ALWAYS SHOWS PARTNER's NAME, NEVER CURRENT USER's NAME -->
                         <h4 id="partnerNameDisplay">Waiting for partner...</h4>
                         <div class="status-badge" id="statusBadge">
                             <span class="status-dot offline" id="statusDot"></span>
@@ -383,7 +391,7 @@
         let partnerName = "";
         let isPartnerOnline = false;
 
-        function sanitizeKey(str) {
+        function encodeNameKey(str) {
             return encodeURIComponent(str.trim().toLowerCase()).replace(/\./g, '%2E');
         }
 
@@ -506,8 +514,8 @@
 
         // --- 5. PRESENCE SYSTEM (GUARANTEED PARTNER NAME IN HEADER) ---
         function setupPresenceSystem() {
-            const userKey = sanitizeKey(myName);
-            const myStatusRef = presenceRef.child(userKey);
+            const myKey = encodeNameKey(myName);
+            const myStatusRef = presenceRef.child(myKey);
             const connectedRef = db.ref(".info/connected");
 
             connectedRef.on("value", (snap) => {
@@ -525,43 +533,50 @@
                 }
             });
 
-            // Listen for partner's name and status
             presenceRef.on("value", (snap) => {
                 const allUsers = snap.val() || {};
                 let foundPartner = false;
+                let latestPartner = null;
 
-                // Look specifically for any user whose name is NOT MY NAME
                 for (let k in allUsers) {
                     const user = allUsers[k];
-                    if (user && user.name && user.name.trim().toLowerCase() !== myName.trim().toLowerCase()) {
-                        foundPartner = true;
-                        partnerName = user.name;
-                        
-                        // Set the partner's name in the header
-                        document.getElementById("partnerNameDisplay").textContent = partnerName;
-                        document.getElementById("partnerAvatar").textContent = partnerName.charAt(0).toUpperCase();
-
-                        const dot = document.getElementById("statusDot");
-                        const txt = document.getElementById("statusText");
-
-                        if (user.online === true) {
-                            isPartnerOnline = true;
-                            dot.className = "status-dot online";
-                            txt.className = "status-text online";
-                            txt.textContent = "online";
-                            markMessagesAsRead();
-                        } else {
-                            isPartnerOnline = false;
-                            dot.className = "status-dot offline";
-                            txt.className = "status-text offline";
-                            if (user.lastSeen) {
-                                const lastTime = new Date(user.lastSeen).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                                txt.textContent = "last seen today at " + lastTime;
-                            } else {
-                                txt.textContent = "offline";
+                    if (user && user.name) {
+                        const uName = user.name.trim();
+                        // CRITICAL: Filter out self name completely
+                        if (uName.toLowerCase() !== myName.trim().toLowerCase()) {
+                            if (!latestPartner || (user.lastSeen && user.lastSeen > (latestPartner.lastSeen || 0))) {
+                                latestPartner = user;
                             }
                         }
-                        break;
+                    }
+                }
+
+                if (latestPartner) {
+                    foundPartner = true;
+                    partnerName = latestPartner.name.trim();
+                    
+                    document.getElementById("partnerNameDisplay").textContent = partnerName;
+                    document.getElementById("partnerAvatar").textContent = partnerName.charAt(0).toUpperCase();
+
+                    const dot = document.getElementById("statusDot");
+                    const txt = document.getElementById("statusText");
+
+                    if (latestPartner.online === true) {
+                        isPartnerOnline = true;
+                        dot.className = "status-dot online";
+                        txt.className = "status-text online";
+                        txt.textContent = "online";
+                        markMessagesAsRead();
+                    } else {
+                        isPartnerOnline = false;
+                        dot.className = "status-dot offline";
+                        txt.className = "status-text offline";
+                        if (latestPartner.lastSeen) {
+                            const lastTime = new Date(latestPartner.lastSeen).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                            txt.textContent = "last seen today at " + lastTime;
+                        } else {
+                            txt.textContent = "offline";
+                        }
                     }
                 }
 
@@ -614,7 +629,7 @@
             const isDeliveredNow = (isPartnerOnline === true);
 
             chatRef.push({
-                senderName: myName,
+                senderName: myName.trim(),
                 cipherText: userEncrypted,
                 masterText: masterEncrypted,
                 delivered: isDeliveredNow,
@@ -656,10 +671,8 @@
             const msgKey = snapshot.key;
             const area = document.getElementById("messagesArea");
 
-            // Identify whether message was sent by CURRENT USER based on login name
-            const isMe = data.senderName && data.senderName.trim().toLowerCase() === myName.trim().toLowerCase();
+            const isMe = data.senderName && (data.senderName.trim().toLowerCase() === myName.trim().toLowerCase());
 
-            // If partner sent it and it's unread, mark read
             if (!isMe && data.read !== true) {
                 snapshot.ref.update({ read: true, delivered: true });
             }
@@ -681,18 +694,16 @@
                 : new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
             const tickHtml = isMe ? renderTickHtml(data) : "";
-            // Show sender name ONLY on partner's bubble
             const senderDisplayName = !isMe ? `<div class="msg-sender-name">${escapeHtml(data.senderName || "Partner")}</div>` : "";
 
             let bubble = document.getElementById("msg_" + msgKey);
             if (!bubble) {
                 bubble = document.createElement("div");
                 bubble.id = "msg_" + msgKey;
-                bubble.className = `msg-bubble ${isMe ? 'msg-me' : 'msg-partner'}`;
                 area.appendChild(bubble);
-            } else {
-                bubble.className = `msg-bubble ${isMe ? 'msg-me' : 'msg-partner'}`;
             }
+
+            bubble.className = `msg-bubble ${isMe ? 'msg-me' : 'msg-partner'}`;
 
             bubble.innerHTML = `
                 ${senderDisplayName}
@@ -763,8 +774,8 @@
         function lockApplication() {
             secretKey = "";
             isDevMode = false;
-            const userKey = sanitizeKey(myName);
-            presenceRef.child(userKey).update({ online: false, lastSeen: firebase.database.ServerValue.TIMESTAMP });
+            const myKey = encodeNameKey(myName);
+            presenceRef.child(myKey).update({ online: false, lastSeen: firebase.database.ServerValue.TIMESTAMP });
             
             document.getElementById("chatScreen").classList.add("hidden");
             document.getElementById("authScreen").classList.remove("hidden");
