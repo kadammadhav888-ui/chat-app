@@ -47,6 +47,7 @@ form.send input{margin:0}
     <input id="pw" type="password" placeholder="Password">
     <button class="full" id="enter">Enter chat</button>
     <div class="err" id="loginErr"></div>
+    <p class="sub" id="status" style="margin:12px 0 0;font-size:12px">Checking database… (v4)</p>
   </div>
 </div>
 
@@ -110,8 +111,21 @@ async function decrypt(key, data) {
 const url = path => `${DB_URL}/rooms/${S ? S.code : ""}${path}.json`;
 async function db(method, u, body) {
   const r = await fetch(u, {method, body: body === undefined ? undefined : JSON.stringify(body)});
-  if (!r.ok) throw new Error("Network/DB error " + r.status);
+  if (!r.ok) { const er = new Error("HTTP " + r.status); er.http = r.status; throw er; }
   return r.json();
+}
+
+function explain(e) {
+  if (e.http === 401 || e.http === 403) return "Database rules block access (" + e.http + "). In Firebase > Realtime Database > Rules, paste the chat rules and press Publish.";
+  if (e.http === 404) return "Database not found (404). DB_URL is wrong - copy it again from Firebase > Realtime Database > Data.";
+  if (e.http) return "Database error: " + e.message;
+  if (e instanceof TypeError) return "No connection to the database. Check internet, turn off ad-blocker/VPN, try another network (Wi-Fi/mobile data), and open this page in Chrome (not inside Claude).";
+  return e.message;
+}
+async function checkDb() {
+  const st = $("status");
+  try { await db("GET", DB_URL + "/rooms/_ping.json"); st.textContent = "Database: connected ✓ (v4)"; st.style.color = "#6ee7a0"; }
+  catch (e) { st.textContent = "Database: " + explain(e) + " (v4)"; st.style.color = "#ff7b8a"; }
 }
 
 async function login() {
@@ -138,7 +152,7 @@ async function login() {
     $("login").classList.add("hidden"); $("app").classList.remove("hidden");
     $("pw").value = ""; $("msgs").innerHTML = ""; seen = new Set();
     await poll(); timer = setInterval(poll, 2000);
-  } catch (e) { S = null; err.textContent = /fetch|network/i.test(e.message) ? "Cannot reach the database. Open this page from your GitHub Pages link (not inside Claude), check internet, and check DB_URL." : e.message; }
+  } catch (e) { S = null; err.textContent = explain(e); }
   $("enter").disabled = false; $("enter").textContent = "Enter chat";
 }
 
@@ -204,10 +218,11 @@ async function changePw() {
     S.key = key; S.salt = salt;
     $("modal").classList.add("hidden"); $("newPw").value = $("newPw2").value = "";
     alert("Password changed. Share the new password with your partner.");
-  } catch (e) { err.textContent = e.message; }
+  } catch (e) { err.textContent = explain(e); }
   $("saveChg").disabled = false; $("saveChg").textContent = "Change password";
 }
 
+checkDb();
 $("enter").onclick = login;
 $("pw").addEventListener("keydown", e => { if (e.key === "Enter") login(); });
 $("sendForm").onsubmit = send;
