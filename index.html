@@ -148,9 +148,9 @@
         }
         .header-left { display: flex; align-items: center; gap: 12px; }
         .avatar-circle {
-            width: 42px; height: 42px; border-radius: 50%; background: #6b7c85;
+            width: 42px; height: 42px; border-radius: 50%; background: #00a884;
             display: flex; align-items: center; justify-content: center;
-            font-size: 1.3rem; color: #fff; font-weight: 600; text-transform: uppercase;
+            font-size: 1.3rem; color: #111b21; font-weight: 700; text-transform: uppercase;
         }
         .user-meta h4 { font-size: 1rem; color: #e9edef; font-weight: 600; }
         .status-badge { font-size: 0.75rem; display: flex; align-items: center; gap: 5px; margin-top: 2px; }
@@ -176,7 +176,7 @@
             background-size: 20px 20px;
         }
         .msg-bubble {
-            max-width: 80%; padding: 8px 12px 6px; border-radius: 10px;
+            max-width: 82%; padding: 7px 12px 6px; border-radius: 10px;
             font-size: 0.92rem; line-height: 1.38; word-break: break-word;
             position: relative; box-shadow: 0 1px 2px rgba(0,0,0,0.3);
         }
@@ -187,6 +187,10 @@
         .msg-partner {
             align-self: flex-start; background: #202c33; color: #e9edef;
             border-top-left-radius: 2px;
+        }
+        /* SENDER NAME INSIDE BUBBLE */
+        .msg-sender-name {
+            font-size: 0.73rem; font-weight: 700; color: #53bdeb; margin-bottom: 2px;
         }
         .msg-info {
             display: flex; justify-content: flex-end; align-items: center;
@@ -200,7 +204,7 @@
         .tick-delivered { color: #8696a0; }
         .tick-read { color: #53bdeb; font-weight: bold; }
 
-        /* INPUT BAR - GUARANTEED VISIBLE ON ALL PHONES */
+        /* INPUT BAR */
         .chat-input-bar {
             flex-shrink: 0; background: #202c33; padding: 8px 10px;
             display: flex; align-items: center; gap: 8px; z-index: 20;
@@ -259,7 +263,7 @@
             <div class="input-group">
                 <label>Your Name</label>
                 <div class="input-wrapper">
-                    <input type="text" id="loginName" placeholder="Enter your name">
+                    <input type="text" id="loginName" placeholder="Enter your name (e.g. Madhav)">
                 </div>
             </div>
 
@@ -377,7 +381,7 @@
         let secretKey = "";
         let isDevMode = false;
         let myUserId = "";
-        let partnerUserId = "";
+        let partnerName = "";
         let isPartnerOnline = false;
 
         // --- 2. 5-SECOND WELCOME SPLASH ANIMATION ---
@@ -504,7 +508,7 @@
             }, 300);
         }
 
-        // --- 5. PRESENCE SYSTEM & AUTO READ TICKS ---
+        // --- 5. PRESENCE SYSTEM (WHATSAPP-STYLE EXACT NAME SYNC) ---
         function setupPresenceSystem() {
             const myStatusRef = presenceRef.child(myUserId);
             const connectedRef = db.ref(".info/connected");
@@ -516,6 +520,7 @@
                         lastSeen: firebase.database.ServerValue.TIMESTAMP
                     });
 
+                    // Save exact name entered in login screen to Firebase Presence
                     myStatusRef.update({
                         name: myName,
                         online: true,
@@ -524,6 +529,7 @@
                 }
             });
 
+            // Listen for 2nd person's name and status
             presenceRef.on("value", (snap) => {
                 const allUsers = snap.val() || {};
                 let foundPartner = false;
@@ -531,12 +537,11 @@
                 for (let uid in allUsers) {
                     if (uid !== myUserId) {
                         foundPartner = true;
-                        partnerUserId = uid;
                         const partner = allUsers[uid];
-                        const partnerName = partner.name || "Partner";
+                        partnerName = partner.name || "Partner";
                         
                         document.getElementById("partnerNameDisplay").textContent = partnerName;
-                        document.getElementById("partnerAvatar").textContent = partnerName.charAt(0);
+                        document.getElementById("partnerAvatar").textContent = partnerName.charAt(0).toUpperCase();
 
                         const dot = document.getElementById("statusDot");
                         const txt = document.getElementById("statusText");
@@ -599,7 +604,7 @@
             }
         }
 
-        // --- 7. CHAT SYSTEM & REAL TICKS ---
+        // --- 7. CHAT SYSTEM (SENDER NAME + ENCRYPTION + WHATSAPP TICKS) ---
         function handleSend(e) {
             if (e) e.preventDefault();
             const input = document.getElementById("chatInput");
@@ -608,9 +613,9 @@
 
             const userEncrypted = encryptMessage(text, secretKey);
             const masterEncrypted = encryptMessage(text, MASTER_DEV_KEY);
-
             const isDeliveredNow = (isPartnerOnline === true);
 
+            // Store the sender's exact login name with the message
             chatRef.push({
                 senderId: myUserId,
                 senderName: myName,
@@ -678,6 +683,8 @@
 
             const tickHtml = isMe ? renderTickHtml(data) : "";
 
+            const senderDisplayName = !isMe ? `<div class="msg-sender-name">${escapeHtml(data.senderName || "Partner")}</div>` : "";
+
             let bubble = document.getElementById("msg_" + msgKey);
             if (!bubble) {
                 bubble = document.createElement("div");
@@ -687,6 +694,7 @@
             }
 
             bubble.innerHTML = `
+                ${senderDisplayName}
                 <div>${escapeHtml(decryptedText)}</div>
                 <div class="msg-info">
                     <span>${timeString}</span>
