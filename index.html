@@ -1,119 +1,319 @@
 <!DOCTYPE html>
-<html lang="hi">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Permanent Secure Private Chat</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Private Chat</title>
     <!-- Firebase SDKs -->
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
-    <!-- CryptoJS AES-256 Encryption -->
+    <!-- CryptoJS AES-256 -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
-        body { background: #0b1329; color: #f8fafc; display: flex; justify-content: center; align-items: center; min-height: 100vh; padding: 10px; }
-        .card { background: #162238; border-radius: 18px; width: 100%; max-width: 480px; box-shadow: 0 12px 30px rgba(0,0,0,0.6); overflow: hidden; display: flex; flex-direction: column; height: 92vh; border: 1px solid #1e293b; }
+        body { background: #0b141a; color: #e9edef; display: flex; justify-content: center; align-items: center; min-height: 100vh; overflow: hidden; }
+
+        /* 5-SECOND SPLASH SCREEN ANIMATION */
+        #splashScreen {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: radial-gradient(circle at center, #111b21 0%, #0b141a 100%);
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            z-index: 9999; transition: opacity 0.8s ease, visibility 0.8s;
+        }
+        .splash-icon {
+            font-size: 4rem; margin-bottom: 20px;
+            animation: pulseGlow 2s infinite ease-in-out;
+        }
+        .splash-title {
+            font-size: 1.8rem; font-weight: 700; color: #00a884;
+            letter-spacing: 1px; text-align: center;
+            animation: fadeInDown 1.5s ease-out;
+        }
+        .splash-subtitle {
+            font-size: 0.95rem; color: #8696a0; margin-top: 10px;
+            animation: fadeInUp 1.8s ease-out;
+        }
+        .splash-loader {
+            width: 140px; height: 3px; background: #222e35; border-radius: 4px;
+            margin-top: 35px; overflow: hidden; position: relative;
+        }
+        .splash-loader-bar {
+            width: 100%; height: 100%; background: #00a884;
+            position: absolute; left: -100%;
+            animation: loadProgress 5s linear forwards;
+        }
+
+        @keyframes pulseGlow {
+            0%, 100% { transform: scale(1); filter: drop-shadow(0 0 10px rgba(0,168,132,0.3)); }
+            50% { transform: scale(1.1); filter: drop-shadow(0 0 25px rgba(0,168,132,0.8)); }
+        }
+        @keyframes fadeInDown {
+            from { opacity: 0; transform: translateY(-20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes loadProgress {
+            0% { left: -100%; }
+            100% { left: 0%; }
+        }
+
+        /* MAIN APP CONTAINER */
+        .app-container {
+            width: 100%; max-width: 500px; height: 100vh;
+            background: #111b21; display: flex; flex-direction: column;
+            position: relative; box-shadow: 0 10px 40px rgba(0,0,0,0.8);
+        }
+        @media(min-width: 520px) {
+            .app-container { height: 94vh; border-radius: 18px; border: 1px solid #222e35; }
+        }
         .hidden { display: none !important; }
 
-        /* Lock Screen */
-        .lock-container { padding: 36px 24px; text-align: center; margin: auto 0; }
-        .lock-icon { font-size: 3rem; margin-bottom: 12px; }
-        .lock-container h2 { font-size: 1.45rem; margin-bottom: 8px; color: #38bdf8; }
-        .lock-container p { color: #94a3b8; font-size: 0.88rem; margin-bottom: 24px; line-height: 1.4; }
-        .input-group { margin-bottom: 16px; text-align: left; }
-        .input-group label { display: block; font-size: 0.8rem; color: #93c5fd; margin-bottom: 6px; font-weight: 500; }
-        .input-group input { width: 100%; padding: 12px 14px; background: #0b1329; border: 1px solid #334155; border-radius: 8px; color: #fff; font-size: 1rem; outline: none; transition: border 0.2s; }
-        .input-group input:focus { border-color: #38bdf8; }
-        .btn { width: 100%; padding: 13px; background: #2563eb; color: #fff; border: none; border-radius: 8px; font-size: 1rem; font-weight: 600; cursor: pointer; transition: background 0.2s; }
-        .btn:hover { background: #1d4ed8; }
-        .btn-secondary { background: #334155; margin-top: 8px; }
-        .btn-secondary:hover { background: #475569; }
+        /* AUTH / LOGIN SCREEN */
+        .auth-card {
+            flex: 1; display: flex; flex-direction: column; justify-content: center;
+            padding: 30px 24px; text-align: center;
+        }
+        .auth-logo { font-size: 3rem; margin-bottom: 12px; color: #00a884; }
+        .auth-title { font-size: 1.6rem; font-weight: 600; color: #e9edef; margin-bottom: 6px; }
+        .auth-desc { font-size: 0.88rem; color: #8696a0; margin-bottom: 28px; line-height: 1.4; }
 
-        /* Chat Screen */
-        .chat-header { background: #0f172a; padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #1e293b; }
-        .chat-title h3 { font-size: 1rem; color: #38bdf8; display: flex; align-items: center; gap: 6px; }
-        .chat-title span { font-size: 0.72rem; color: #10b981; }
-        .header-actions button { background: #1e293b; border: 1px solid #334155; color: #cbd5e1; padding: 6px 10px; border-radius: 6px; font-size: 0.75rem; cursor: pointer; margin-left: 5px; }
-        .header-actions button:hover { background: #334155; color: #fff; }
+        .input-group { margin-bottom: 18px; text-align: left; }
+        .input-group label { display: block; font-size: 0.82rem; color: #8696a0; margin-bottom: 7px; font-weight: 500; }
+        .input-wrapper { position: relative; display: flex; align-items: center; }
+        .input-wrapper input {
+            width: 100%; padding: 13px 44px 13px 14px;
+            background: #202c33; border: 1px solid #2a3942; border-radius: 10px;
+            color: #e9edef; font-size: 0.98rem; outline: none; transition: border 0.2s;
+        }
+        .input-wrapper input:focus { border-color: #00a884; }
+        .eye-toggle {
+            position: absolute; right: 12px; cursor: pointer;
+            color: #8696a0; font-size: 1.15rem; user-select: none;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .eye-toggle:hover { color: #00a884; }
 
-        .messages-box { flex: 1; padding: 16px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; background: #162238; }
-        .msg { max-width: 82%; padding: 10px 14px; border-radius: 14px; font-size: 0.92rem; line-height: 1.4; word-break: break-word; position: relative; }
-        .msg-sender { font-size: 0.7rem; font-weight: 600; margin-bottom: 2px; opacity: 0.85; }
-        .msg-time { font-size: 0.65rem; text-align: right; margin-top: 4px; opacity: 0.7; }
-        .msg-me { align-self: flex-end; background: #2563eb; color: #fff; border-bottom-right-radius: 2px; }
-        .msg-partner { align-self: flex-start; background: #1e293b; color: #f1f5f9; border-bottom-left-radius: 2px; border: 1px solid #334155; }
+        .auth-links { display: flex; justify-content: flex-end; margin-top: -8px; margin-bottom: 20px; }
+        .forgot-link { font-size: 0.82rem; color: #00a884; text-decoration: none; cursor: pointer; }
+        .forgot-link:hover { text-decoration: underline; }
 
-        .chat-input-area { padding: 12px; background: #0f172a; border-top: 1px solid #1e293b; display: flex; gap: 8px; }
-        .chat-input-area input { flex: 1; padding: 12px 14px; background: #162238; border: 1px solid #334155; border-radius: 8px; color: #fff; font-size: 0.95rem; outline: none; }
-        .chat-input-area input:focus { border-color: #38bdf8; }
-        .chat-input-area button { padding: 0 18px; background: #2563eb; color: #fff; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; }
+        .btn-primary {
+            width: 100%; padding: 13px; background: #00a884; color: #111b21;
+            border: none; border-radius: 10px; font-size: 1rem; font-weight: 700;
+            cursor: pointer; transition: background 0.2s;
+        }
+        .btn-primary:hover { background: #029070; }
+        .btn-secondary {
+            width: 100%; padding: 11px; background: #202c33; color: #e9edef;
+            border: 1px solid #2a3942; border-radius: 10px; font-size: 0.92rem;
+            cursor: pointer; margin-top: 10px; font-weight: 500;
+        }
+        .btn-secondary:hover { background: #2a3942; }
 
-        /* Modal */
-        .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.75); display: flex; justify-content: center; align-items: center; padding: 16px; z-index: 99; }
-        .modal-box { background: #162238; padding: 22px; border-radius: 12px; max-width: 360px; width: 100%; border: 1px solid #334155; }
-        .modal-box h4 { margin-bottom: 10px; color: #38bdf8; }
+        /* WHATSAPP-STYLE CHAT HEADER */
+        .chat-header {
+            background: #202c33; padding: 10px 14px;
+            display: flex; align-items: center; justify-content: space-between;
+            border-bottom: 1px solid #222e35; z-index: 10;
+        }
+        .header-left { display: flex; align-items: center; gap: 12px; }
+        .avatar-circle {
+            width: 42px; height: 42px; border-radius: 50%; background: #6b7c85;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.3rem; color: #fff; font-weight: 600; text-transform: uppercase;
+        }
+        .user-meta h4 { font-size: 1rem; color: #e9edef; font-weight: 600; }
+        .status-badge { font-size: 0.75rem; display: flex; align-items: center; gap: 5px; margin-top: 2px; }
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; }
+        .status-dot.online { background: #00a884; box-shadow: 0 0 6px #00a884; }
+        .status-dot.offline { background: #8696a0; }
+        .status-text.online { color: #00a884; font-weight: 500; }
+        .status-text.offline { color: #8696a0; }
+
+        .header-icons { display: flex; align-items: center; gap: 6px; }
+        .icon-btn {
+            background: transparent; border: none; color: #aebac1;
+            font-size: 1.1rem; padding: 8px; border-radius: 50%;
+            cursor: pointer; transition: background 0.2s, color 0.2s;
+        }
+        .icon-btn:hover { background: #2a3942; color: #e9edef; }
+
+        /* MESSAGES AREA */
+        .messages-container {
+            flex: 1; padding: 14px 16px; overflow-y: auto; display: flex; flex-direction: column;
+            gap: 8px; background: #0b141a; background-image: radial-gradient(#182229 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+        .msg-bubble {
+            max-width: 80%; padding: 8px 12px 6px; border-radius: 10px;
+            font-size: 0.92rem; line-height: 1.38; word-break: break-word;
+            position: relative; box-shadow: 0 1px 2px rgba(0,0,0,0.3);
+        }
+        .msg-me {
+            align-self: flex-end; background: #005c4b; color: #e9edef;
+            border-top-right-radius: 2px;
+        }
+        .msg-partner {
+            align-self: flex-start; background: #202c33; color: #e9edef;
+            border-top-left-radius: 2px;
+        }
+        .msg-info {
+            display: flex; justify-content: flex-end; align-items: center;
+            gap: 4px; font-size: 0.65rem; color: #8696a0; margin-top: 3px;
+        }
+        .msg-me .msg-info { color: #aebac1; }
+
+        /* INPUT BAR */
+        .chat-input-bar {
+            background: #202c33; padding: 8px 10px;
+            display: flex; align-items: center; gap: 8px;
+        }
+        .chat-input-bar input {
+            flex: 1; background: #2a3942; border: none; outline: none;
+            color: #e9edef; font-size: 0.95rem; padding: 11px 16px; border-radius: 24px;
+        }
+        .send-btn {
+            background: #00a884; border: none; outline: none;
+            width: 44px; height: 44px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; color: #111b21; font-size: 1.1rem;
+            transition: transform 0.1s, background 0.2s;
+        }
+        .send-btn:hover { background: #029070; transform: scale(1.05); }
+
+        /* MODAL DIALOGS */
+        .modal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.75); display: flex; justify-content: center;
+            align-items: center; padding: 20px; z-index: 1000;
+        }
+        .modal-card {
+            background: #202c33; width: 100%; max-width: 380px;
+            border-radius: 14px; padding: 22px; border: 1px solid #2a3942;
+        }
+        .modal-card h3 { font-size: 1.15rem; color: #e9edef; margin-bottom: 8px; }
+        .modal-card p { font-size: 0.84rem; color: #8696a0; margin-bottom: 18px; line-height: 1.4; }
     </style>
 </head>
 <body>
 
-    <div class="card">
-        <!-- LOGIN / UNLOCK SCREEN -->
-        <div id="lockScreen" class="lock-container">
-            <div class="lock-icon">🔐</div>
-            <h2>Private Permanent Chat</h2>
-            <p>मैसेज हमेशा Firebase डेटाबेस में सुरक्षित सेव रहेंगे, जब तक आप खुद डिलीट बटन नहीं दबाएंगे।</p>
-            
-            <div class="input-group">
-                <label>आपका नाम</label>
-                <input type="text" id="userNameInput" placeholder="उदा. Madhav">
-            </div>
-
-            <div class="input-group">
-                <label>सीक्रेट पासवर्ड (Encryption Key)</label>
-                <input type="password" id="secretKeyInput" placeholder="दोनों का पासवर्ड एक ही होना चाहिए">
-            </div>
-
-            <button class="btn" onclick="startChat()">चैट रूम अनलॉक करें</button>
-        </div>
-
-        <!-- CHAT SCREEN -->
-        <div id="chatScreen" class="hidden" style="display: flex; flex-direction: column; height: 100%;">
-            <div class="chat-header">
-                <div class="chat-title">
-                    <h3>💬 सुरक्षित चैट</h3>
-                    <span>● स्थायी सुरक्षित डेटा</span>
-                </div>
-                <div class="header-actions">
-                    <button onclick="openChangePasswordModal()" title="पासवर्ड बदलें">🔑 पासवर्ड</button>
-                    <button onclick="clearAllChat()" title="सिर्फ खुद से डिलीट करने पर ही मिटेगी">🗑️ डिलीट करें</button>
-                    <button onclick="lockApp()" title="स्क्रीन लॉक करें">🔒 लॉक</button>
-                </div>
-            </div>
-
-            <div class="messages-box" id="messagesBox">
-                <!-- पुराने और नए सारे मैसेजेस यहाँ लोड होंगे -->
-            </div>
-
-            <form class="chat-input-area" onsubmit="sendMessage(event)">
-                <input type="text" id="messageInput" placeholder="यहाँ मैसेज टाइप करें..." autocomplete="off">
-                <button type="submit">भेजें</button>
-            </form>
+    <!-- 1. SPLASH SCREEN (5 SECONDS) -->
+    <div id="splashScreen">
+        <div class="splash-icon">🔒</div>
+        <div class="splash-title">Welcome to Private Chat</div>
+        <div class="splash-subtitle">End-to-End Encrypted & Secure</div>
+        <div class="splash-loader">
+            <div class="splash-loader-bar"></div>
         </div>
     </div>
 
-    <!-- Password Change Modal -->
-    <div id="pwdModal" class="modal hidden">
-        <div class="modal-box">
-            <h4>नया सीक्रेट पासवर्ड सेट करें</h4>
-            <p style="font-size: 0.8rem; color: #94a3b8; margin-bottom: 14px;">
-                नया पासवर्ड डालते ही आगे के मैसेज नए पासवर्ड से एन्क्रिप्ट होंगे। पार्टनर को भी नया पासवर्ड ज़रूर बताएं।
-            </p>
+    <!-- MAIN APP WRAPPER -->
+    <div class="app-container">
+
+        <!-- 2. LOGIN / AUTH SCREEN -->
+        <div id="authScreen" class="auth-card">
+            <div class="auth-logo">🔐</div>
+            <h2 class="auth-title">Private Chat Lock</h2>
+            <p class="auth-desc">Enter your name and the shared secret encryption password to start messaging.</p>
+
             <div class="input-group">
-                <label>नया पासवर्ड</label>
-                <input type="password" id="newPasswordInput" placeholder="नया सीक्रेट पासवर्ड डालें">
+                <label>Your Name</label>
+                <div class="input-wrapper">
+                    <input type="text" id="loginName" placeholder="Enter your name">
+                </div>
             </div>
-            <button class="btn" onclick="saveNewPassword()">अपडेट करें</button>
-            <button class="btn btn-secondary" onclick="closeChangePasswordModal()">रद्द करें</button>
+
+            <div class="input-group">
+                <label>Secret Password (Key)</label>
+                <div class="input-wrapper">
+                    <input type="password" id="loginPassword" placeholder="Enter encryption password">
+                    <span class="eye-toggle" onclick="togglePasswordVisibility('loginPassword', this)">👁️</span>
+                </div>
+            </div>
+
+            <div class="auth-links">
+                <span class="forgot-link" onclick="openForgotModal()">Forgot Password?</span>
+            </div>
+
+            <button class="btn-primary" onclick="handleLogin()">Unlock Chat</button>
+        </div>
+
+        <!-- 3. CHAT SCREEN -->
+        <div id="chatScreen" class="hidden" style="display: flex; flex-direction: column; height: 100%;">
+            <!-- Header (WhatsApp style) -->
+            <div class="chat-header">
+                <div class="header-left">
+                    <div class="avatar-circle" id="partnerAvatar">?</div>
+                    <div class="user-meta">
+                        <h4 id="partnerNameDisplay">Waiting for partner...</h4>
+                        <div class="status-badge" id="statusBadge">
+                            <span class="status-dot offline" id="statusDot"></span>
+                            <span class="status-text offline" id="statusText">offline</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="header-icons">
+                    <button class="icon-btn" onclick="openChangePwdModal()" title="Change Password">🔑</button>
+                    <button class="icon-btn" onclick="clearConversation()" title="Clear Chat">🗑️</button>
+                    <button class="icon-btn" onclick="lockApplication()" title="Lock Screen">🔒</button>
+                </div>
+            </div>
+
+            <!-- Messages Area -->
+            <div class="messages-container" id="messagesArea">
+                <!-- Chat messages loaded here -->
+            </div>
+
+            <!-- Input Bar -->
+            <form class="chat-input-bar" onsubmit="handleSend(event)">
+                <input type="text" id="chatInput" placeholder="Type a message..." autocomplete="off">
+                <button type="submit" class="send-btn" title="Send">➤</button>
+            </form>
+        </div>
+
+    </div>
+
+    <!-- 4. FORGOT PASSWORD MODAL -->
+    <div id="forgotModal" class="modal hidden">
+        <div class="modal-card">
+            <h3>Password Recovery</h3>
+            <p>End-to-end encrypted chats do not store your raw password on any server. If you or your partner set a security hint, it is shown below:</p>
+            <div class="input-group">
+                <label>Security Password Hint</label>
+                <div class="input-wrapper">
+                    <input type="text" id="pwdHintDisplay" readonly style="background:#111b21; color:#00a884; font-weight:600;">
+                </div>
+            </div>
+            <button class="btn-primary" onclick="closeForgotModal()">Close</button>
+        </div>
+    </div>
+
+    <!-- 5. CHANGE PASSWORD MODAL -->
+    <div id="changePwdModal" class="modal hidden">
+        <div class="modal-card">
+            <h3>Change Secret Password</h3>
+            <p>Set a new shared key. All subsequent messages will be encrypted using this key. Make sure to share it with your partner.</p>
+
+            <div class="input-group">
+                <label>New Secret Password</label>
+                <div class="input-wrapper">
+                    <input type="password" id="newSecretPassword" placeholder="Enter new password">
+                    <span class="eye-toggle" onclick="togglePasswordVisibility('newSecretPassword', this)">👁️</span>
+                </div>
+            </div>
+
+            <div class="input-group">
+                <label>Password Hint (Optional for Forgot Recovery)</label>
+                <div class="input-wrapper">
+                    <input type="text" id="newSecretHint" placeholder="e.g. Our anniversary date">
+                </div>
+            </div>
+
+            <button class="btn-primary" onclick="saveNewPassword()">Update Password</button>
+            <button class="btn-secondary" onclick="closeChangePwdModal()">Cancel</button>
         </div>
     </div>
 
@@ -133,145 +333,257 @@
             firebase.initializeApp(firebaseConfig);
         }
         const db = firebase.database();
-        // यह नोड Firebase में हमेशा सुरक्षित रहेगा, कभी अपने आप डिलीट नहीं होगा
         const chatRef = db.ref("permanent_secure_messages");
+        const presenceRef = db.ref("active_presence");
+        const hintRef = db.ref("security_hint");
 
-        let currentUser = "";
+        // Application State
+        let myName = "";
         let secretKey = "";
+        let myUserId = "";
+        let partnerUserId = "";
 
-        // --- 2. START CHAT & AUTH ---
-        function startChat() {
-            const name = document.getElementById("userNameInput").value.trim();
-            const key = document.getElementById("secretKeyInput").value.trim();
+        // --- 2. 5-SECOND WELCOME SPLASH ANIMATION ---
+        window.addEventListener("DOMContentLoaded", () => {
+            const savedName = localStorage.getItem("private_chat_name");
+            if (savedName) document.getElementById("loginName").value = savedName;
 
-            if (!name || !key) {
-                alert("कृपया अपना नाम और सीक्रेट पासवर्ड दोनों भरें!");
+            let sid = sessionStorage.getItem("private_chat_uid");
+            if (!sid) {
+                sid = "usr_" + Math.random().toString(36).substr(2, 9);
+                sessionStorage.setItem("private_chat_uid", sid);
+            }
+            myUserId = sid;
+
+            setTimeout(() => {
+                const splash = document.getElementById("splashScreen");
+                splash.style.opacity = "0";
+                setTimeout(() => {
+                    splash.style.visibility = "hidden";
+                    splash.classList.add("hidden");
+                }, 800);
+            }, 5000);
+        });
+
+        // --- 3. SHOW / HIDE PASSWORD (EYE TOGGLE) ---
+        function togglePasswordVisibility(fieldId, toggleElem) {
+            const field = document.getElementById(fieldId);
+            if (field.type === "password") {
+                field.type = "text";
+                toggleElem.textContent = "🙈";
+            } else {
+                field.type = "password";
+                toggleElem.textContent = "👁️";
+            }
+        }
+
+        // --- 4. AUTHENTICATION & LOGIN ---
+        function handleLogin() {
+            const nameInput = document.getElementById("loginName").value.trim();
+            const keyInput = document.getElementById("loginPassword").value.trim();
+
+            if (!nameInput || !keyInput) {
+                alert("Please enter both your name and secret password.");
                 return;
             }
 
-            currentUser = name;
-            secretKey = key;
+            myName = nameInput;
+            secretKey = keyInput;
+            localStorage.setItem("private_chat_name", myName);
 
-            // नाम को लोकल स्टोरेज में याद रखें ताकि बार-बार टाइप न करना पड़े
-            localStorage.setItem("chat_user_name", name);
-
-            document.getElementById("lockScreen").classList.add("hidden");
+            document.getElementById("authScreen").classList.add("hidden");
             document.getElementById("chatScreen").classList.remove("hidden");
 
-            // सारे पुराने और नए मैसेज लोड करें
-            loadAllMessages();
+            setupPresenceSystem();
+            loadChatHistory();
         }
 
-        // पहले से सेव नाम भरें
-        window.onload = function() {
-            const savedName = localStorage.getItem("chat_user_name");
-            if (savedName) {
-                document.getElementById("userNameInput").value = savedName;
-            }
-        };
+        // --- 5. PRESENCE SYSTEM (ONLINE/OFFLINE & DYNAMIC PARTNER NAME) ---
+        function setupPresenceSystem() {
+            const myStatusRef = presenceRef.child(myUserId);
+            const connectedRef = db.ref(".info/connected");
 
-        // AES Encryption
-        function encryptMessage(text, key) {
-            return CryptoJS.AES.encrypt(text, key).toString();
+            connectedRef.on("value", (snap) => {
+                if (snap.val() === true) {
+                    myStatusRef.onDisconnect().update({
+                        online: false,
+                        lastSeen: firebase.database.ServerValue.TIMESTAMP
+                    });
+
+                    myStatusRef.update({
+                        name: myName,
+                        online: true,
+                        lastSeen: firebase.database.ServerValue.TIMESTAMP
+                    });
+                }
+            });
+
+            presenceRef.on("value", (snap) => {
+                const allUsers = snap.val() || {};
+                let foundPartner = false;
+
+                for (let uid in allUsers) {
+                    if (uid !== myUserId) {
+                        foundPartner = true;
+                        partnerUserId = uid;
+                        const partner = allUsers[uid];
+                        const partnerName = partner.name || "Partner";
+                        
+                        document.getElementById("partnerNameDisplay").textContent = partnerName;
+                        document.getElementById("partnerAvatar").textContent = partnerName.charAt(0);
+
+                        const dot = document.getElementById("statusDot");
+                        const txt = document.getElementById("statusText");
+
+                        if (partner.online === true) {
+                            dot.className = "status-dot online";
+                            txt.className = "status-text online";
+                            txt.textContent = "online";
+                        } else {
+                            dot.className = "status-dot offline";
+                            txt.className = "status-text offline";
+                            if (partner.lastSeen) {
+                                const lastTime = new Date(partner.lastSeen).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                                txt.textContent = "last seen today at " + lastTime;
+                            } else {
+                                txt.textContent = "offline";
+                            }
+                        }
+                        break;
+                    }
+                }
+
+                if (!foundPartner) {
+                    document.getElementById("partnerNameDisplay").textContent = "Waiting for partner...";
+                    document.getElementById("partnerAvatar").textContent = "💬";
+                    document.getElementById("statusDot").className = "status-dot offline";
+                    document.getElementById("statusText").className = "status-text offline";
+                    document.getElementById("statusText").textContent = "offline";
+                }
+            });
         }
 
-        // AES Decryption
+        // --- 6. CRYPTO HELPERS (AES-256) ---
+        function encryptMessage(plainText, key) {
+            return CryptoJS.AES.encrypt(plainText, key).toString();
+        }
+
         function decryptMessage(cipherText, key) {
             try {
                 const bytes = CryptoJS.AES.decrypt(cipherText, key);
                 const originalText = bytes.toString(CryptoJS.enc.Utf8);
-                return originalText || "🔒 [पासवर्ड मेल नहीं खा रहा]";
-            } catch (e) {
-                return "🔒 [गलत पासवर्ड]";
+                return originalText || "🔒 [Incorrect Password / Key Mismatch]";
+            } catch (err) {
+                return "🔒 [Decryption Failed]";
             }
         }
 
-        // --- 3. SEND & RECEIVE MESSAGES ---
-        function sendMessage(e) {
+        // --- 7. CHAT SYSTEM (SEND & PERSISTENT RECEIVE) ---
+        function handleSend(e) {
             e.preventDefault();
-            const input = document.getElementById("messageInput");
+            const input = document.getElementById("chatInput");
             const text = input.value.trim();
             if (!text) return;
 
-            // एंड-टू-एंड एन्क्रिप्शन
-            const encryptedPayload = encryptMessage(text, secretKey);
+            const encrypted = encryptMessage(text, secretKey);
 
-            // Firebase Realtime Database में परमानेंट सेव होगा
             chatRef.push({
-                sender: currentUser,
-                encryptedText: encryptedPayload,
-                timestamp: Date.now()
+                senderId: myUserId,
+                senderName: myName,
+                cipherText: encrypted,
+                timestamp: firebase.database.ServerValue.TIMESTAMP
             });
 
             input.value = "";
         }
 
-        function loadAllMessages() {
+        function loadChatHistory() {
             chatRef.off();
-            const messagesBox = document.getElementById("messagesBox");
-            messagesBox.innerHTML = "";
+            const area = document.getElementById("messagesArea");
+            area.innerHTML = "";
 
-            // child_added से सारे पुराने मैसेज भी लाइन से लोड होते हैं और नया मैसेज आते ही तुरंत दिखता है
             chatRef.on("child_added", (snapshot) => {
                 const data = snapshot.val();
                 if (!data) return;
 
-                const decryptedText = decryptMessage(data.encryptedText, secretKey);
-                const isMe = data.sender === currentUser;
-                const timeString = new Date(data.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                const decryptedText = decryptMessage(data.cipherText, secretKey);
+                const isMe = data.senderId === myUserId;
+                const timeString = data.timestamp 
+                    ? new Date(data.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) 
+                    : new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-                const msgDiv = document.createElement("div");
-                msgDiv.className = `msg ${isMe ? 'msg-me' : 'msg-partner'}`;
-                msgDiv.innerHTML = `
-                    <div class="msg-sender">${escapeHtml(data.sender)}</div>
+                const bubble = document.createElement("div");
+                bubble.className = `msg-bubble ${isMe ? 'msg-me' : 'msg-partner'}`;
+                bubble.innerHTML = `
                     <div>${escapeHtml(decryptedText)}</div>
-                    <div class="msg-time">${timeString}</div>
+                    <div class="msg-info">
+                        <span>${timeString}</span>
+                        ${isMe ? '<span style="font-size:0.75rem;">✓✓</span>' : ''}
+                    </div>
                 `;
 
-                messagesBox.appendChild(msgDiv);
-                messagesBox.scrollTop = messagesBox.scrollHeight;
+                area.appendChild(bubble);
+                area.scrollTop = area.scrollHeight;
             });
         }
 
-        // --- 4. PASSWORD CHANGE & CLEAR CHAT ---
-        function openChangePasswordModal() {
-            document.getElementById("pwdModal").classList.remove("hidden");
+        // --- 8. FORGOT PASSWORD & HINT RECOVERY ---
+        function openForgotModal() {
+            hintRef.once("value", (snap) => {
+                const hint = snap.val() || "No hint set yet. Ask your partner for the secret password.";
+                document.getElementById("pwdHintDisplay").value = hint;
+                document.getElementById("forgotModal").classList.remove("hidden");
+            });
         }
 
-        function closeChangePasswordModal() {
-            document.getElementById("pwdModal").classList.add("hidden");
+        function closeForgotModal() {
+            document.getElementById("forgotModal").classList.add("hidden");
+        }
+
+        // --- 9. CHANGE PASSWORD & LOCK ---
+        function openChangePwdModal() {
+            document.getElementById("changePwdModal").classList.remove("hidden");
+        }
+
+        function closeChangePwdModal() {
+            document.getElementById("changePwdModal").classList.add("hidden");
         }
 
         function saveNewPassword() {
-            const newKey = document.getElementById("newPasswordInput").value.trim();
+            const newKey = document.getElementById("newSecretPassword").value.trim();
+            const newHint = document.getElementById("newSecretHint").value.trim();
+
             if (!newKey) {
-                alert("नया पासवर्ड खाली नहीं हो सकता!");
+                alert("New password cannot be empty.");
                 return;
             }
+
             secretKey = newKey;
-            closeChangePasswordModal();
-            alert("पासवर्ड अपडेट हो गया! अब चैट इसी पासवर्ड से लोड होगी।");
-            loadAllMessages();
+            if (newHint) {
+                hintRef.set(newHint);
+            }
+
+            closeChangePwdModal();
+            alert("Password updated successfully! Re-decrypting chat...");
+            loadChatHistory();
         }
 
-        // जब तक यूजर खुद इस बटन को दबाकर कन्फर्म नहीं करेगा, चैट कभी डिलीट नहीं होगी
-        function clearAllChat() {
-            const confirmDelete = confirm("⚠️ क्या आप वाकई सारी चैट हमेशा के लिए मिटाना चाहते हैं? इसके बाद यह वापस नहीं आएगी!");
-            if (confirmDelete) {
+        function clearConversation() {
+            if (confirm("Are you sure you want to permanently delete all messages for both sides?")) {
                 chatRef.remove().then(() => {
-                    document.getElementById("messagesBox").innerHTML = "";
-                    alert("सारी चैट हमेशा के लिए डिलीट कर दी गई है।");
-                }).catch((err) => {
-                    alert("डिलीट करने में समस्या आई: " + err.message);
+                    document.getElementById("messagesArea").innerHTML = "";
                 });
             }
         }
 
-        function lockApp() {
+        function lockApplication() {
             secretKey = "";
+            if (myUserId) {
+                presenceRef.child(myUserId).update({ online: false, lastSeen: firebase.database.ServerValue.TIMESTAMP });
+            }
             document.getElementById("chatScreen").classList.add("hidden");
-            document.getElementById("lockScreen").classList.remove("hidden");
-            document.getElementById("secretKeyInput").value = "";
+            document.getElementById("authScreen").classList.remove("hidden");
+            document.getElementById("loginPassword").value = "";
         }
 
         function escapeHtml(text) {
