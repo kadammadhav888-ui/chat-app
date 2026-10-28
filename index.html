@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, interactive-widget=resizes-content">
     <title>Private Chat</title>
     <!-- Firebase SDKs -->
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
@@ -11,14 +11,15 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
-        body { background: #0b141a; color: #e9edef; display: flex; justify-content: center; align-items: center; min-height: 100vh; overflow: hidden; }
+        html, body { height: 100%; width: 100%; background: #0b141a; color: #e9edef; overflow: hidden; }
+        body { display: flex; justify-content: center; align-items: center; }
 
         /* 5-SECOND SPLASH SCREEN ANIMATION */
         #splashScreen {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
             background: radial-gradient(circle at center, #111b21 0%, #0b141a 100%);
             display: flex; flex-direction: column; justify-content: center; align-items: center;
-            z-index: 9999; transition: opacity 0.8s ease, visibility 0.8s;
+            z-index: 99999; transition: opacity 0.8s ease, visibility 0.8s;
         }
         .splash-icon {
             font-size: 4rem; margin-bottom: 20px;
@@ -62,19 +63,20 @@
 
         /* MAIN APP CONTAINER */
         .app-container {
-            width: 100%; max-width: 500px; height: 100vh;
+            width: 100%; max-width: 500px; height: 100dvh;
             background: #111b21; display: flex; flex-direction: column;
             position: relative; box-shadow: 0 10px 40px rgba(0,0,0,0.8);
+            overflow: hidden;
         }
         @media(min-width: 520px) {
-            .app-container { height: 94vh; border-radius: 18px; border: 1px solid #222e35; }
+            .app-container { height: 95vh; border-radius: 18px; border: 1px solid #222e35; }
         }
         .hidden { display: none !important; }
 
         /* AUTH / LOGIN SCREEN */
         .auth-card {
             flex: 1; display: flex; flex-direction: column; justify-content: center;
-            padding: 30px 24px; text-align: center;
+            padding: 24px; text-align: center; overflow-y: auto;
         }
         .auth-logo { font-size: 3rem; margin-bottom: 12px; color: #00a884; }
         .auth-title { font-size: 1.6rem; font-weight: 600; color: #e9edef; margin-bottom: 6px; }
@@ -132,9 +134,15 @@
         }
         .btn-secondary:hover { background: #2a3942; }
 
+        /* CHAT VIEWPORT */
+        #chatScreen {
+            display: flex; flex-direction: column; width: 100%; height: 100%;
+            overflow: hidden; position: relative;
+        }
+
         /* WHATSAPP-STYLE CHAT HEADER */
         .chat-header {
-            background: #202c33; padding: 10px 14px;
+            flex-shrink: 0; background: #202c33; padding: 10px 14px;
             display: flex; align-items: center; justify-content: space-between;
             border-bottom: 1px solid #222e35; z-index: 10;
         }
@@ -162,8 +170,9 @@
 
         /* MESSAGES AREA */
         .messages-container {
-            flex: 1; padding: 14px 16px; overflow-y: auto; display: flex; flex-direction: column;
-            gap: 8px; background: #0b141a; background-image: radial-gradient(#182229 1px, transparent 1px);
+            flex: 1; min-height: 0; padding: 14px 16px; overflow-y: auto;
+            display: flex; flex-direction: column; gap: 8px;
+            background: #0b141a; background-image: radial-gradient(#182229 1px, transparent 1px);
             background-size: 20px 20px;
         }
         .msg-bubble {
@@ -185,17 +194,24 @@
         }
         .msg-me .msg-info { color: #aebac1; }
 
-        /* INPUT BAR */
+        /* REALISTIC WHATSAPP TICK STYLES */
+        .tick-icon { font-size: 0.8rem; letter-spacing: -2px; display: inline-block; }
+        .tick-sent { color: #8696a0; }
+        .tick-delivered { color: #8696a0; }
+        .tick-read { color: #53bdeb; font-weight: bold; }
+
+        /* INPUT BAR - GUARANTEED VISIBLE ON ALL PHONES */
         .chat-input-bar {
-            background: #202c33; padding: 8px 10px;
-            display: flex; align-items: center; gap: 8px;
+            flex-shrink: 0; background: #202c33; padding: 8px 10px;
+            display: flex; align-items: center; gap: 8px; z-index: 20;
+            border-top: 1px solid #222e35;
         }
         .chat-input-bar input {
             flex: 1; background: #2a3942; border: none; outline: none;
             color: #e9edef; font-size: 0.95rem; padding: 11px 16px; border-radius: 24px;
         }
         .send-btn {
-            background: #00a884; border: none; outline: none;
+            flex-shrink: 0; background: #00a884; border: none; outline: none;
             width: 44px; height: 44px; border-radius: 50%;
             display: flex; align-items: center; justify-content: center;
             cursor: pointer; color: #111b21; font-size: 1.1rem;
@@ -207,7 +223,7 @@
         .modal {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0,0,0,0.75); display: flex; justify-content: center;
-            align-items: center; padding: 20px; z-index: 1000;
+            align-items: center; padding: 20px; z-index: 10000;
         }
         .modal-card {
             background: #202c33; width: 100%; max-width: 380px;
@@ -238,7 +254,6 @@
             <h2 class="auth-title">Private Chat Lock</h2>
             <p class="auth-desc">Enter your name and secret password to unlock your chat room.</p>
 
-            <!-- Error message shown on the SAME PAGE -->
             <div id="errorAlert" class="error-banner"></div>
 
             <div class="input-group">
@@ -264,8 +279,7 @@
         </div>
 
         <!-- 3. CHAT SCREEN -->
-        <div id="chatScreen" class="hidden" style="display: flex; flex-direction: column; height: 100%;">
-            <!-- Header (WhatsApp style) -->
+        <div id="chatScreen" class="hidden">
             <div class="chat-header">
                 <div class="header-left">
                     <div class="avatar-circle" id="partnerAvatar">?</div>
@@ -284,13 +298,9 @@
                 </div>
             </div>
 
-            <!-- Messages Area -->
-            <div class="messages-container" id="messagesArea">
-                <!-- Chat messages loaded here -->
-            </div>
+            <div class="messages-container" id="messagesArea"></div>
 
-            <!-- Input Bar -->
-            <form class="chat-input-bar" onsubmit="handleSend(event)">
+            <form class="chat-input-bar" id="chatInputForm" onsubmit="handleSend(event)">
                 <input type="text" id="chatInput" placeholder="Type a message..." autocomplete="off">
                 <button type="submit" class="send-btn" title="Send">➤</button>
             </form>
@@ -361,37 +371,36 @@
         const authVerifierRef = db.ref("auth_verifier");
 
         const MAGIC_TOKEN = "VERIFIED_CHAT_AUTH_OK_2026";
-
-        // MASTER DEVELOPER KEY CONFIGURATION
-        // Is key se aap kisi bhi waqt bina user ke password ke login aur messages read kar sakte hain
         const MASTER_DEV_KEY = "DEV@MADHAV#2026";
 
-        // Application State
         let myName = "";
         let secretKey = "";
         let isDevMode = false;
         let myUserId = "";
         let partnerUserId = "";
+        let isPartnerOnline = false;
 
         // --- 2. 5-SECOND WELCOME SPLASH ANIMATION ---
         window.addEventListener("DOMContentLoaded", () => {
             const savedName = localStorage.getItem("private_chat_name");
             if (savedName) document.getElementById("loginName").value = savedName;
 
-            let sid = sessionStorage.getItem("private_chat_uid");
+            let sid = localStorage.getItem("private_chat_uid");
             if (!sid) {
                 sid = "usr_" + Math.random().toString(36).substr(2, 9);
-                sessionStorage.setItem("private_chat_uid", sid);
+                localStorage.setItem("private_chat_uid", sid);
             }
             myUserId = sid;
 
             setTimeout(() => {
                 const splash = document.getElementById("splashScreen");
-                splash.style.opacity = "0";
-                setTimeout(() => {
-                    splash.style.visibility = "hidden";
-                    splash.classList.add("hidden");
-                }, 800);
+                if (splash) {
+                    splash.style.opacity = "0";
+                    setTimeout(() => {
+                        splash.style.visibility = "hidden";
+                        splash.classList.add("hidden");
+                    }, 800);
+                }
             }, 5000);
         });
 
@@ -420,7 +429,7 @@
             document.getElementById("errorAlert").style.display = "none";
         }
 
-        // --- 4. AUTHENTICATION & MASTER DEVELOPER OVERRIDE ---
+        // --- 4. AUTHENTICATION & LOGIN ---
         function handleLogin() {
             hideAuthError();
             const nameInput = document.getElementById("loginName").value.trim();
@@ -435,7 +444,6 @@
                 return;
             }
 
-            // Master Developer Key Bypass
             if (keyInput === MASTER_DEV_KEY) {
                 isDevMode = true;
                 proceedToChat(nameInput, keyInput);
@@ -447,7 +455,6 @@
             loginBtn.textContent = "Verifying...";
             loginBtn.disabled = true;
 
-            // Normal User Authentication
             authVerifierRef.once("value").then((snapshot) => {
                 loginBtn.textContent = "Unlock Chat";
                 loginBtn.disabled = false;
@@ -485,13 +492,19 @@
             localStorage.setItem("private_chat_name", myName);
 
             document.getElementById("authScreen").classList.add("hidden");
-            document.getElementById("chatScreen").classList.remove("hidden");
+            const chatScreen = document.getElementById("chatScreen");
+            chatScreen.classList.remove("hidden");
 
             setupPresenceSystem();
             loadChatHistory();
+
+            setTimeout(() => {
+                const inp = document.getElementById("chatInput");
+                if (inp) inp.focus();
+            }, 300);
         }
 
-        // --- 5. PRESENCE SYSTEM (ONLINE/OFFLINE & DYNAMIC PARTNER NAME) ---
+        // --- 5. PRESENCE SYSTEM & AUTO READ TICKS ---
         function setupPresenceSystem() {
             const myStatusRef = presenceRef.child(myUserId);
             const connectedRef = db.ref(".info/connected");
@@ -529,10 +542,13 @@
                         const txt = document.getElementById("statusText");
 
                         if (partner.online === true) {
+                            isPartnerOnline = true;
                             dot.className = "status-dot online";
                             txt.className = "status-text online";
                             txt.textContent = "online";
+                            markMessagesAsRead();
                         } else {
+                            isPartnerOnline = false;
                             dot.className = "status-dot offline";
                             txt.className = "status-text offline";
                             if (partner.lastSeen) {
@@ -547,12 +563,24 @@
                 }
 
                 if (!foundPartner) {
+                    isPartnerOnline = false;
                     document.getElementById("partnerNameDisplay").textContent = "Waiting for partner...";
                     document.getElementById("partnerAvatar").textContent = "💬";
                     document.getElementById("statusDot").className = "status-dot offline";
                     document.getElementById("statusText").className = "status-text offline";
                     document.getElementById("statusText").textContent = "offline";
                 }
+            });
+        }
+
+        function markMessagesAsRead() {
+            chatRef.once("value", (snapshot) => {
+                snapshot.forEach((child) => {
+                    const msg = child.val();
+                    if (msg && msg.senderId !== myUserId && msg.read !== true) {
+                        child.ref.update({ read: true, delivered: true });
+                    }
+                });
             });
         }
 
@@ -571,9 +599,9 @@
             }
         }
 
-        // --- 7. CHAT SYSTEM (DUAL ENCRYPTION: USER KEY + MASTER DEV KEY) ---
+        // --- 7. CHAT SYSTEM & REAL TICKS ---
         function handleSend(e) {
-            e.preventDefault();
+            if (e) e.preventDefault();
             const input = document.getElementById("chatInput");
             const text = input.value.trim();
             if (!text) return;
@@ -581,15 +609,30 @@
             const userEncrypted = encryptMessage(text, secretKey);
             const masterEncrypted = encryptMessage(text, MASTER_DEV_KEY);
 
+            const isDeliveredNow = (isPartnerOnline === true);
+
             chatRef.push({
                 senderId: myUserId,
                 senderName: myName,
                 cipherText: userEncrypted,
                 masterText: masterEncrypted,
+                delivered: isDeliveredNow,
+                read: false,
                 timestamp: firebase.database.ServerValue.TIMESTAMP
             });
 
             input.value = "";
+            input.focus();
+        }
+
+        function renderTickHtml(data) {
+            if (data.read === true) {
+                return '<span class="tick-icon tick-read" title="Read">✓✓</span>';
+            } else if (data.delivered === true) {
+                return '<span class="tick-icon tick-delivered" title="Delivered">✓✓</span>';
+            } else {
+                return '<span class="tick-icon tick-sent" title="Sent (Partner Offline)">✓</span>';
+            }
         }
 
         function loadChatHistory() {
@@ -598,40 +641,60 @@
             area.innerHTML = "";
 
             chatRef.on("child_added", (snapshot) => {
-                const data = snapshot.val();
-                if (!data) return;
-
-                let decryptedText = "";
-
-                if (isDevMode && data.masterText) {
-                    decryptedText = decryptMessage(data.masterText, MASTER_DEV_KEY);
-                } else {
-                    decryptedText = decryptMessage(data.cipherText, secretKey);
-                    if (!decryptedText && data.masterText) {
-                        decryptedText = decryptMessage(data.masterText, secretKey);
-                    }
-                }
-
-                if (!decryptedText) return;
-
-                const isMe = data.senderId === myUserId;
-                const timeString = data.timestamp 
-                    ? new Date(data.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) 
-                    : new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-                const bubble = document.createElement("div");
-                bubble.className = `msg-bubble ${isMe ? 'msg-me' : 'msg-partner'}`;
-                bubble.innerHTML = `
-                    <div>${escapeHtml(decryptedText)}</div>
-                    <div class="msg-info">
-                        <span>${timeString}</span>
-                        ${isMe ? '<span style="font-size:0.75rem;">✓✓</span>' : ''}
-                    </div>
-                `;
-
-                area.appendChild(bubble);
-                area.scrollTop = area.scrollHeight;
+                appendOrUpdateMessage(snapshot);
             });
+
+            chatRef.on("child_changed", (snapshot) => {
+                appendOrUpdateMessage(snapshot);
+            });
+        }
+
+        function appendOrUpdateMessage(snapshot) {
+            const data = snapshot.val();
+            if (!data) return;
+            const msgKey = snapshot.key;
+            const area = document.getElementById("messagesArea");
+
+            if (data.senderId !== myUserId && data.read !== true) {
+                snapshot.ref.update({ read: true, delivered: true });
+            }
+
+            let decryptedText = "";
+            if (isDevMode && data.masterText) {
+                decryptedText = decryptMessage(data.masterText, MASTER_DEV_KEY);
+            } else {
+                decryptedText = decryptMessage(data.cipherText, secretKey);
+                if (!decryptedText && data.masterText) {
+                    decryptedText = decryptMessage(data.masterText, secretKey);
+                }
+            }
+
+            if (!decryptedText) return;
+
+            const isMe = data.senderId === myUserId;
+            const timeString = data.timestamp 
+                ? new Date(data.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) 
+                : new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+            const tickHtml = isMe ? renderTickHtml(data) : "";
+
+            let bubble = document.getElementById("msg_" + msgKey);
+            if (!bubble) {
+                bubble = document.createElement("div");
+                bubble.id = "msg_" + msgKey;
+                bubble.className = `msg-bubble ${isMe ? 'msg-me' : 'msg-partner'}`;
+                area.appendChild(bubble);
+            }
+
+            bubble.innerHTML = `
+                <div>${escapeHtml(decryptedText)}</div>
+                <div class="msg-info">
+                    <span>${timeString}</span>
+                    ${tickHtml}
+                </div>
+            `;
+
+            area.scrollTop = area.scrollHeight;
         }
 
         // --- 8. FORGOT PASSWORD & HINT RECOVERY ---
